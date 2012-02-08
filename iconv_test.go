@@ -83,6 +83,7 @@ func TestPassthrough(t *testing.T) {
 	if string(b) != testData[0].other {
 		t.Errorf("passthrough failed")
 	}
+	cd.Close()
 }
 
 func TestMultipleEncodings(t *testing.T) {
@@ -124,5 +125,7 @@ func TestMultipleEncodings(t *testing.T) {
 	if string(b) == expected {
 		t.Errorf("mix failed")
 	}
+	cd1.Close()
+	cd2.Close()
 }
 
