@@ -19,13 +19,13 @@ var testData = []struct{utf8, other, otherEncoding string} {
 
 func TestIconv(t *testing.T) {
 	for _, data := range testData {
-		cd, err := Open("UTF-8", data.otherEncoding)
+		ic, err := Open("UTF-8", data.otherEncoding)
 		if err != nil {
 			t.Errorf("Error on opening: %s\n", err)
 			continue
 		}
 
-		str, err := cd.Conv([]byte(data.other))
+		str, err := ic.Conv([]byte(data.other))
 		if err != nil {
 			t.Errorf("Error on conversion: %s\n", err)
 			continue
@@ -35,7 +35,7 @@ func TestIconv(t *testing.T) {
 			t.Errorf("Unexpected value: %#v (expected %#v)", str, data.utf8)
 		}
 
-		err = cd.Close()
+		err = ic.Close()
 		if err != nil {
 			t.Errorf("Error on close: %s\n", err)
 		}
@@ -44,13 +44,13 @@ func TestIconv(t *testing.T) {
 
 func TestIconvReverse(t *testing.T) {
 	for _, data := range testData {
-		cd, err := Open(data.otherEncoding, "UTF-8")
+		ic, err := Open(data.otherEncoding, "UTF-8")
 		if err != nil {
 			t.Errorf("Error on opening: %s\n", err)
 			continue
 		}
 
-		str, err := cd.Conv([]byte(data.utf8))
+		str, err := ic.Conv([]byte(data.utf8))
 		if err != nil {
 			t.Errorf("Error on conversion: %s\n", err)
 			continue
@@ -60,7 +60,7 @@ func TestIconvReverse(t *testing.T) {
 			t.Errorf("Unexpected value: %#v (expected %#v)", str, data.other)
 		}
 
-		err = cd.Close()
+		err = ic.Close()
 		if err != nil {
 			t.Errorf("Error on close: %s\n", err)
 		}
@@ -76,59 +76,49 @@ func TestInvalidEncoding(t *testing.T) {
 }
 
 func TestDiscardUnrecognized(t *testing.T) {
-	cd, err := OpenWithFallback(testData[1].otherEncoding, "UTF-8", DISCARD_UNRECOGNIZED)
+	ic, err := OpenWithFallback(testData[1].otherEncoding, "UTF-8", DISCARD_UNRECOGNIZED)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
 	}
-	b, err := cd.Conv([]byte(testData[0].other))
+	b, err := ic.Conv([]byte(testData[0].other))
 	if len(b) > 0 {
 		t.Errorf("should discard all")
 	}
-	cd.Close()
+	ic.Close()
 }
 
 func TestKeepUnrecognized(t *testing.T) {
-	cd, err := OpenWithFallback(testData[1].otherEncoding, "UTF-8", KEEP_UNRECOGNIZED)
+	ic, err := OpenWithFallback(testData[1].otherEncoding, "UTF-8", KEEP_UNRECOGNIZED)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
 	}
-	b, err := cd.Conv([]byte(testData[0].other))
+	b, err := ic.Conv([]byte(testData[0].other))
 	if string(b) != testData[0].other {
 		t.Errorf("should be the same as the original input")
 	}
-	cd.Close()
+	ic.Close()
 }
 
-func TestMultipleEncodings(t *testing.T) {
-	input := testData[0].other + "; " + testData[1].other
-	expected := testData[0].utf8 + "; " + testData[1].utf8
+func TestMixedEncodings(t *testing.T) {
+	input := testData[0].other + "; " + testData[1].other + "; " + testData[0].other
+	expected := testData[0].utf8 + "; " + testData[1].utf8 + "; " + testData[0].utf8
 	
-	cd1, err := Open("UTF-8", testData[0].otherEncoding)
+	ic, err := OpenWithFallback("UTF-8", testData[0].otherEncoding, NEXT_ENC_UNRECOGNIZED)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
 	}
 	
-	b, err := cd1.Conv([]byte(input))
-	if err != nil {
-		t.Errorf("Error on conversion: %s\n", err)
-		return
-	}
-	println(strconv.QuoteToASCII(testData[0].utf8 + "; " + testData[1].other))
-	println(strconv.QuoteToASCII(string(b)))
-	
-	input2 := string(b)
-	
-	cd2, err := Open("UTF-8", testData[0].otherEncoding)
+	fallbackic, err := Open("UTF-8", testData[1].otherEncoding)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
 	}
+	ic.SetFallback(fallbackic)
 	
-	b, err = cd2.Conv([]byte(input2))
-	
+	b, err := ic.Conv([]byte(input))
 	if err != nil {
 		t.Errorf("Error on conversion: %s\n", err)
 		return
@@ -137,10 +127,9 @@ func TestMultipleEncodings(t *testing.T) {
 	println(strconv.QuoteToASCII(expected))
 	println(strconv.QuoteToASCII(string(b)))
 	
-	if string(b) == expected {
+	if string(b) != expected {
 		t.Errorf("mix failed")
 	}
-	cd1.Close()
-	cd2.Close()
+	ic.Close()
 }
 

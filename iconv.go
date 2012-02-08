@@ -16,6 +16,7 @@ type Iconv struct {
 	pIconv C.iconv_t
 	fallbackPolicy int
 	fallback func([]byte, io.Writer, []byte) (int, os.Error)
+	fallbackIconv *Iconv
 }
 
 const (
@@ -26,7 +27,9 @@ const (
 
 var (
 	NilIconvPointer = os.NewError("Nil iconv pointer")
-	InvalidFallbackPolicy = os.NewError("Invalid Fallback Policy")
+	NilFallbackIconv = os.NewError("Nil fallback iconv")
+	InvalidFallbackPolicy = os.NewError("Invalid fallback policy")
+	FallbackCannotAdvance = os.NewError("Fallback cannot advance conversion")
 	InvalidSequence = os.Errno(int(C.EILSEQ))
 	OutputBufferInsufficient = os.Errno(int(C.E2BIG))
 	IncompleteSequence = os.Errno(int(C.EINVAL))
@@ -59,13 +62,20 @@ func OpenWithFallback(toCode string, fromCode string, fallbackPolicy int) (ic *I
 			return
 		}
 		if fallbackPolicy == DISCARD_UNRECOGNIZED {
-			ic = &Iconv{pIconv: pIconv, fallback: fallbackDiscardUnrecognized}
+			ic = &Iconv{pIconv: pIconv, fallbackPolicy: fallbackPolicy, fallback: fallbackDiscardUnrecognized}
 		} else if fallbackPolicy == KEEP_UNRECOGNIZED {
-			ic = &Iconv{pIconv: pIconv, fallback: fallbackKeepIntactUnrecognized}
+			ic = &Iconv{pIconv: pIconv, fallbackPolicy: fallbackPolicy, fallback: fallbackKeepIntactUnrecognized}
+		} else if fallbackPolicy == NEXT_ENC_UNRECOGNIZED {
+			ic = &Iconv{pIconv: pIconv, fallbackPolicy: fallbackPolicy}
 		} else {
 			err = InvalidFallbackPolicy
 		}
 	}
+	return
+}
+
+func (ic *Iconv) SetFallback(fallbackIconv *Iconv) {
+	ic.fallbackIconv = fallbackIconv
 	return
 }
 
@@ -76,6 +86,10 @@ func Open(toCode string, fromCode string) (ic *Iconv, err os.Error) {
 
 func (ic *Iconv) Close() (err os.Error) {
 	_, err = C.iconv_close(ic.pIconv)
+	if ic.fallbackIconv != nil {
+		ic.fallbackIconv.Close()
+		ic.fallbackIconv = nil
+	}
 	return
 }
 
@@ -104,30 +118,41 @@ func (ic *Iconv) convert(input []byte, out io.Writer, outBuf []byte) (bytesConve
 	if int(outputBytesLeft) < outputLen {
 		out.Write(outBuf[:outputLen-int(outputBytesLeft)])
 	}
-
 	return
 }
 
 //err returns the last error
 func (ic *Iconv) Conv(input []byte) (output []byte, err os.Error) {
-	totalInputLen := len(input)
-	if totalInputLen == 0 {
+	inputLen := len(input)
+	if inputLen == 0 {
 		output = input
 		return
 	}
 	buf := &bytes.Buffer{}
-	var bytesConverted int
-	outBuf := make([]byte, totalInputLen)
-	
+	outBuf := make([]byte, inputLen)
 	offset := 0
-		
-	for offset < totalInputLen {
+	bytesConverted := 0
+	
+	for offset < inputLen {
 		bytesConverted, err = ic.convert(input[offset:], buf, outBuf)
 		offset += bytesConverted
+		bytesConverted = 0
 		if err == InvalidSequence || err == IncompleteSequence {
-			fallbackInput := input[offset:offset+1]
-			bytesConverted, err = ic.fallback(fallbackInput, buf, outBuf)
-			offset += bytesConverted
+			if ic.fallbackPolicy == NEXT_ENC_UNRECOGNIZED {
+				if ic.fallbackIconv == nil {
+					err = NilFallbackIconv
+					return
+				}
+				bytesConverted, err = ic.fallbackIconv.convert(input[offset:], buf, outBuf)
+			} else {
+				bytesConverted, err = ic.fallback(input[offset:offset+1], buf, outBuf)
+			}
+			if bytesConverted > 0 {
+				offset += bytesConverted
+			} else {
+				err = FallbackCannotAdvance
+				break
+			}
 		}
 	}
 	output = buf.Bytes()
