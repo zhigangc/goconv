@@ -16,7 +16,7 @@ var testData = []struct{utf8, other, otherEncoding string} {
 	{"€1 is cheap", "\xa41 is cheap", "ISO-8859-15"},
 	{"", "", "SJIS"},
 }
-/*
+
 func TestIconv(t *testing.T) {
 	for _, data := range testData {
 		cd, err := Open("UTF-8", data.otherEncoding)
@@ -84,11 +84,11 @@ func TestPassthrough(t *testing.T) {
 		t.Errorf("passthrough failed")
 	}
 }
-*/
+
 func TestMultipleEncodings(t *testing.T) {
-	//input := testData[0].other + "; " + testData[1].other
-	//expected := testData[0].utf8 + "; " + testData[1].utf8
-	/*
+	input := testData[0].other + "; " + testData[1].other
+	expected := testData[0].utf8 + "; " + testData[1].utf8
+	
 	cd1, err := Open("UTF-8", testData[0].otherEncoding)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
@@ -104,14 +104,13 @@ func TestMultipleEncodings(t *testing.T) {
 	println(strconv.QuoteToASCII(string(b)))
 	
 	input2 := string(b)
-	*/
 	
 	cd2, err := Open("UTF-8", testData[0].otherEncoding)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
 	}
-	/*
+	
 	b, err = cd2.Conv([]byte(input2))
 	
 	if err != nil {
@@ -122,18 +121,8 @@ func TestMultipleEncodings(t *testing.T) {
 	println(strconv.QuoteToASCII(expected))
 	println(strconv.QuoteToASCII(string(b)))
 	
-	*/
-	b, err := cd2.Conv([]byte(testData[1].utf8))
-	
-	if err != nil {
-		t.Errorf("Error on conversion: %s\n", err)
-		return
-	}
-	println(strconv.QuoteToASCII(testData[1].utf8))
-	println(strconv.QuoteToASCII(string(b)))
-	/*
-	if string(b) != expected {
+	if string(b) == expected {
 		t.Errorf("mix failed")
-	}*/
+	}
 }
 

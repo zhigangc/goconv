@@ -48,6 +48,7 @@ func (ic *Iconv) Close() (err os.Error) {
 	return
 }
 
+//err returns the last error
 func (ic *Iconv) Conv(input []byte) (output []byte, err os.Error) {
 	totalInputLen := len(input)
 	if totalInputLen == 0 {
@@ -77,7 +78,6 @@ func (ic *Iconv) Conv(input []byte) (output []byte, err os.Error) {
 		}
 
 		if err == InvalidSequence || err == IncompleteSequence {
-			println(offset)
 			offset += (inputLen - int(inputBytes))
 			buf.WriteByte(input[offset])
 			offset += 1
@@ -90,6 +90,5 @@ func (ic *Iconv) Conv(input []byte) (output []byte, err os.Error) {
 		}
 	}
 	output = buf.Bytes()
-	err = nil
 	return
 }
