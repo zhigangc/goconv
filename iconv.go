@@ -47,7 +47,7 @@ func fallbackKeepIntactUnrecognized(input []byte, out io.Writer, outBuf []byte) 
 	return
 }
 
-func OpenWithFallback(toCode string, fromCode string, fallbackPolicy int) (ic *Iconv, err os.Error) {
+func OpenWithFallback(fromCode string, toCode string, fallbackPolicy int) (ic *Iconv, err os.Error) {
 	var pIconv C.iconv_t
 	
 	toCodeCharPtr := C.CString(toCode)
@@ -79,8 +79,8 @@ func (ic *Iconv) SetFallback(fallbackIconv *Iconv) {
 	return
 }
 
-func Open(toCode string, fromCode string) (ic *Iconv, err os.Error) {
-	ic, err = OpenWithFallback(toCode, fromCode, DISCARD_UNRECOGNIZED)
+func Open(fromCode string, toCode string) (ic *Iconv, err os.Error) {
+	ic, err = OpenWithFallback(fromCode, toCode, DISCARD_UNRECOGNIZED)
 	return
 }
 

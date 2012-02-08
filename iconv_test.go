@@ -19,7 +19,7 @@ var testData = []struct{utf8, other, otherEncoding string} {
 
 func TestIconv(t *testing.T) {
 	for _, data := range testData {
-		ic, err := Open("UTF-8", data.otherEncoding)
+		ic, err := Open(data.otherEncoding, "UTF-8")
 		if err != nil {
 			t.Errorf("Error on opening: %s\n", err)
 			continue
@@ -44,7 +44,7 @@ func TestIconv(t *testing.T) {
 
 func TestIconvReverse(t *testing.T) {
 	for _, data := range testData {
-		ic, err := Open(data.otherEncoding, "UTF-8")
+		ic, err := Open("UTF-8", data.otherEncoding)
 		if err != nil {
 			t.Errorf("Error on opening: %s\n", err)
 			continue
@@ -76,7 +76,7 @@ func TestInvalidEncoding(t *testing.T) {
 }
 
 func TestDiscardUnrecognized(t *testing.T) {
-	ic, err := OpenWithFallback(testData[1].otherEncoding, "UTF-8", DISCARD_UNRECOGNIZED)
+	ic, err := OpenWithFallback("UTF-8", testData[0].otherEncoding, DISCARD_UNRECOGNIZED)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
@@ -89,7 +89,7 @@ func TestDiscardUnrecognized(t *testing.T) {
 }
 
 func TestKeepUnrecognized(t *testing.T) {
-	ic, err := OpenWithFallback(testData[1].otherEncoding, "UTF-8", KEEP_UNRECOGNIZED)
+	ic, err := OpenWithFallback("UTF-8", testData[0].otherEncoding, KEEP_UNRECOGNIZED)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
@@ -105,13 +105,13 @@ func TestMixedEncodings(t *testing.T) {
 	input := testData[0].other + "; " + testData[1].other + "; " + testData[0].other
 	expected := testData[0].utf8 + "; " + testData[1].utf8 + "; " + testData[0].utf8
 	
-	ic, err := OpenWithFallback("UTF-8", testData[0].otherEncoding, NEXT_ENC_UNRECOGNIZED)
+	ic, err := OpenWithFallback(testData[0].otherEncoding, "UTF-8", NEXT_ENC_UNRECOGNIZED)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
 	}
 	
-	fallbackic, err := Open("UTF-8", testData[1].otherEncoding)
+	fallbackic, err := Open(testData[1].otherEncoding, "UTF-8")
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
