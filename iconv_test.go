@@ -1,7 +1,7 @@
 //
 // iconv_test.go
 //
-package iconv
+package goconv
 
 import (
 	"testing"

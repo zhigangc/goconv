@@ -1,4 +1,4 @@
-package iconv
+package goconv
 // #cgo CFLAGS: -I/usr/include
 // #cgo LDFLAGS: -liconv
 // #include <iconv.h>

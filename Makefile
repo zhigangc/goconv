@@ -4,7 +4,7 @@
 
 include $(GOROOT)/src/Make.inc
 
-TARG=iconv
+TARG=goconv
 
 CGOFILES=iconv.go
 ifneq ($(GOOS),linux)
