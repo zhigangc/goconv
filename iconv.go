@@ -20,20 +20,25 @@ var (
 	InvalidSequence = os.Errno(int(C.EILSEQ))
 	OutputBufferInsufficient = os.Errno(int(C.E2BIG))
 	IncompleteSequence = os.Errno(int(C.EINVAL))
+	InvalidArgument = os.Errno(int(C.EINVAL))
 )
 
 func Open(toCode string, fromCode string) (ic *Iconv, err os.Error) {
+	var pIconv C.iconv_t
+	
 	toCodeCharPtr := C.CString(toCode)
 	defer C.free(unsafe.Pointer(toCodeCharPtr))
 	fromCodeCharPtr := C.CString(fromCode)
 	defer C.free(unsafe.Pointer(fromCodeCharPtr))
-	
-	pIconv, err := C.iconv_open(toCodeCharPtr, fromCodeCharPtr)
+
+	pIconv, err = C.iconv_open(toCodeCharPtr, fromCodeCharPtr)
 	if err == nil {
 		if pIconv == nil {
 			err = NilIconv
 		}
 		ic = &Iconv{pIconv: pIconv}
+	} else if err == InvalidArgument {
+		err = NilIconv
 	}
 	return
 }
@@ -72,15 +77,19 @@ func (ic *Iconv) Conv(input []byte) (output []byte, err os.Error) {
 		}
 
 		if err == InvalidSequence || err == IncompleteSequence {
+			println(offset)
 			offset += (inputLen - int(inputBytes))
 			buf.WriteByte(input[offset])
-			offset ++
-			inputPtr = &input[offset]
-			inputLen = len(input[offset:])
-			inputPtrPtr = (**C.char)(unsafe.Pointer(&inputPtr))
-			inputBytes = C.size_t(inputLen)
+			offset += 1
+			if offset < totalInputLen {
+				inputPtr = &input[offset]
+				inputLen = len(input[offset:])
+				inputPtrPtr = (**C.char)(unsafe.Pointer(&inputPtr))
+				inputBytes = C.size_t(inputLen)
+			}
 		}
 	}
 	output = buf.Bytes()
+	err = nil
 	return
 }
