@@ -5,11 +5,12 @@ package goconv
 
 import (
 	"testing"
+	"io/ioutil"
 	"strconv"
 )
 
 var testData = []struct{utf8, other, otherEncoding string} {
-	{"新浪", "\xd0\xc2\xc0\xcb", "GB2312"},
+	{"新浪", "\xd0\xc2\xc0\xcb", "gb2312"},
 	{"これは漢字です。", "\x82\xb1\x82\xea\x82\xcd\x8a\xbf\x8e\x9a\x82\xc5\x82\xb7\x81B", "SJIS"},
 	{"これは漢字です。", "S0\x8c0o0\"oW[g0Y0\x020", "UTF-16LE"},
 	{"これは漢字です。", "0S0\x8c0oo\"[W0g0Y0\x02", "UTF-16BE"},
@@ -19,7 +20,7 @@ var testData = []struct{utf8, other, otherEncoding string} {
 
 func TestIconv(t *testing.T) {
 	for _, data := range testData {
-		ic, err := Open("UTF-8", data.otherEncoding)
+		ic, err := Open("utf-8", data.otherEncoding)
 		if err != nil {
 			t.Errorf("Error on opening: %s\n", err)
 			continue
@@ -39,6 +40,39 @@ func TestIconv(t *testing.T) {
 		if err != nil {
 			t.Errorf("Error on close: %s\n", err)
 		}
+	}
+}
+
+func TestIconvInputFromFile(t *testing.T) {
+	ic, err := Open("utf-8", testData[0].otherEncoding)
+	if err != nil {
+		t.Errorf("Error on opening: %s\n", err)
+		return
+	}
+
+	input, err := ioutil.ReadFile("gb2312_input.txt")
+	
+	if err != nil {
+		t.Errorf("err: %s\n", err.String())
+	}
+	
+	if string(input) != testData[0].other {
+		t.Errorf("the input from file does not match what it should be")
+		return
+	}
+	str, err := ic.Conv(input)
+	if err != nil {
+		t.Errorf("Error on conversion: %s\n", err)
+		return
+	}
+
+	if string(str) != testData[0].utf8 {
+		t.Errorf("Unexpected value: %#v (expected %#v)", str, testData[0].utf8)
+	}
+
+	err = ic.Close()
+	if err != nil {
+		t.Errorf("Error on close: %s\n", err)
 	}
 }
 
