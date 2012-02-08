@@ -8,22 +8,43 @@ import "C"
 import (
 	"bytes"
 	"os"
+	"io"
 	"unsafe"
 )
 
 type Iconv struct {
 	pIconv C.iconv_t
+	fallbackPolicy int
+	fallback func([]byte, io.Writer, []byte) (int, os.Error)
 }
 
+const (
+	DISCARD_UNRECOGNIZED = 0
+	KEEP_UNRECOGNIZED = 1
+	NEXT_ENC_UNRECOGNIZED = 2
+)
+
 var (
-	NilIconv = os.NewError("Nil iconv object")
+	NilIconvPointer = os.NewError("Nil iconv pointer")
+	InvalidFallbackPolicy = os.NewError("Invalid Fallback Policy")
 	InvalidSequence = os.Errno(int(C.EILSEQ))
 	OutputBufferInsufficient = os.Errno(int(C.E2BIG))
 	IncompleteSequence = os.Errno(int(C.EINVAL))
 	InvalidArgument = os.Errno(int(C.EINVAL))
 )
 
-func Open(toCode string, fromCode string) (ic *Iconv, err os.Error) {
+func fallbackDiscardUnrecognized(input []byte, out io.Writer, outBuf []byte) (bytesConverted int, err os.Error) {
+	bytesConverted = len(input)
+	return
+}
+
+func fallbackKeepIntactUnrecognized(input []byte, out io.Writer, outBuf []byte) (bytesConverted int, err os.Error) {
+	out.Write(input)
+	bytesConverted = len(input)
+	return
+}
+
+func OpenWithFallback(toCode string, fromCode string, fallbackPolicy int) (ic *Iconv, err os.Error) {
 	var pIconv C.iconv_t
 	
 	toCodeCharPtr := C.CString(toCode)
@@ -34,17 +55,56 @@ func Open(toCode string, fromCode string) (ic *Iconv, err os.Error) {
 	pIconv, err = C.iconv_open(toCodeCharPtr, fromCodeCharPtr)
 	if err == nil {
 		if pIconv == nil {
-			err = NilIconv
+			err = NilIconvPointer
+			return
 		}
-		ic = &Iconv{pIconv: pIconv}
-	} else if err == InvalidArgument {
-		err = NilIconv
+		if fallbackPolicy == DISCARD_UNRECOGNIZED {
+			ic = &Iconv{pIconv: pIconv, fallback: fallbackDiscardUnrecognized}
+		} else if fallbackPolicy == KEEP_UNRECOGNIZED {
+			ic = &Iconv{pIconv: pIconv, fallback: fallbackKeepIntactUnrecognized}
+		} else {
+			err = InvalidFallbackPolicy
+		}
 	}
+	return
+}
+
+func Open(toCode string, fromCode string) (ic *Iconv, err os.Error) {
+	ic, err = OpenWithFallback(toCode, fromCode, DISCARD_UNRECOGNIZED)
 	return
 }
 
 func (ic *Iconv) Close() (err os.Error) {
 	_, err = C.iconv_close(ic.pIconv)
+	return
+}
+
+func (ic *Iconv) convert(input []byte, out io.Writer, outBuf []byte) (bytesConverted int, err os.Error) {
+	inputLen := len(input)
+	if inputLen == 0 {
+		return
+	}
+
+	outputLen := len(outBuf)
+	if outputLen == 0 {
+		outputLen = inputLen
+		outBuf = make([]byte, outputLen)
+	}
+
+	outputPtr := &outBuf[0]
+	outputPtrPtr := (**C.char)(unsafe.Pointer(&outputPtr))
+	outputBytesLeft := C.size_t(outputLen)
+	
+	inputPtr := &input[0]
+	inputPtrPtr := (**C.char)(unsafe.Pointer(&inputPtr))
+	inputBytesLeft := C.size_t(inputLen)
+		
+	_, err = C.iconv(ic.pIconv, inputPtrPtr, &inputBytesLeft, outputPtrPtr, &outputBytesLeft)
+	bytesConverted = inputLen - int(inputBytesLeft)
+	if int(outputBytesLeft) < outputLen {
+		out.Write(outBuf[:outputLen-int(outputBytesLeft)])
+	}
+
 	return
 }
 
@@ -55,38 +115,19 @@ func (ic *Iconv) Conv(input []byte) (output []byte, err os.Error) {
 		output = input
 		return
 	}
-	var buf bytes.Buffer
-	outputLimit := totalInputLen	
-	output = make([]byte, outputLimit)
-	outputPtr := &output[0]
-	outputPtrPtr := (**C.char)(unsafe.Pointer(&outputPtr))
-	outputBytes := C.size_t(outputLimit)
+	buf := &bytes.Buffer{}
+	var bytesConverted int
+	outBuf := make([]byte, totalInputLen)
 	
 	offset := 0
-	inputPtr := &input[offset]
-	inputLen := len(input[offset:])
-	inputPtrPtr := (**C.char)(unsafe.Pointer(&inputPtr))
-	inputBytes := C.size_t(inputLen)
 		
-	for inputBytes > 0 && offset < totalInputLen {
-		_, err = C.iconv(ic.pIconv, inputPtrPtr, &inputBytes, outputPtrPtr, &outputBytes)
-		if int(outputBytes) < outputLimit {
-			buf.Write(output[:outputLimit-int(outputBytes)])
-			outputPtr = &output[0]
-			outputPtrPtr = (**C.char)(unsafe.Pointer(&outputPtr))
-			outputBytes = C.size_t(outputLimit)
-		}
-
+	for offset < totalInputLen {
+		bytesConverted, err = ic.convert(input[offset:], buf, outBuf)
+		offset += bytesConverted
 		if err == InvalidSequence || err == IncompleteSequence {
-			offset += (inputLen - int(inputBytes))
-			buf.WriteByte(input[offset])
-			offset += 1
-			if offset < totalInputLen {
-				inputPtr = &input[offset]
-				inputLen = len(input[offset:])
-				inputPtrPtr = (**C.char)(unsafe.Pointer(&inputPtr))
-				inputBytes = C.size_t(inputLen)
-			}
+			fallbackInput := input[offset:offset+1]
+			bytesConverted, err = ic.fallback(fallbackInput, buf, outBuf)
+			offset += bytesConverted
 		}
 	}
 	output = buf.Bytes()

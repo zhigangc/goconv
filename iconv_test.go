@@ -67,21 +67,36 @@ func TestIconvReverse(t *testing.T) {
 	}
 }
 
-func TestPassthrough(t *testing.T) {
+func TestInvalidEncoding(t *testing.T) {
 	_, err := Open("INVALID_ENCODING", "INVALID_ENCODING")
-	if err != NilIconv {
+	if err != InvalidArgument {
 		t.Errorf("should've been error")
 		return
 	}
+}
 
-	cd, err := Open("SJIS", "UTF-8")
+func TestDiscardUnrecognized(t *testing.T) {
+	cd, err := OpenWithFallback(testData[1].otherEncoding, "UTF-8", DISCARD_UNRECOGNIZED)
+	if err != nil {
+		t.Errorf("Error on opening: %s\n", err)
+		return
+	}
+	b, err := cd.Conv([]byte(testData[0].other))
+	if len(b) > 0 {
+		t.Errorf("should discard all")
+	}
+	cd.Close()
+}
+
+func TestKeepUnrecognized(t *testing.T) {
+	cd, err := OpenWithFallback(testData[1].otherEncoding, "UTF-8", KEEP_UNRECOGNIZED)
 	if err != nil {
 		t.Errorf("Error on opening: %s\n", err)
 		return
 	}
 	b, err := cd.Conv([]byte(testData[0].other))
 	if string(b) != testData[0].other {
-		t.Errorf("passthrough failed")
+		t.Errorf("should be the same as the original input")
 	}
 	cd.Close()
 }
